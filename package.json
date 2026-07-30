@@ -1,0 +1,15 @@
+{
+  "name": "spiritual-root-api",
+  "version": "1.0.0",
+  "description": "Spiritual Root Calculator REST API based on Purple Star Astrology (iztro)",
+  "type": "module",
+  "main": "spiritual_root_api.js",
+  "scripts": {
+    "start": "node spiritual_root_api.js",
+    "test": "node -e \"import('iztro').then(m => console.log('iztro loaded:', Object.keys(m))).catch(e => console.error('iztro load failed:', e.message))\""
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "iztro": "^2.0.0"
+  }
+}
