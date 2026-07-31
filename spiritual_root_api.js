@@ -15,6 +15,7 @@
 
 import express from 'express';
 import { astro as iztroAstro } from 'iztro';
+import { generateReportHTML, generateReportJSON, generateNormalReportHTML, generateNormalReportJSON, isDataSufficientForPRO } from './report_generator.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -513,6 +514,18 @@ app.get('/api/docs', (req, res) => {
         description: 'Same as POST but via query parameters',
         params: { birth_date: 'YYYY-MM-DD', birth_hour: '0-23', gender: 'male|female' },
       },
+      'POST /api/report': {
+        description: 'Generate a multi-language PRO+ tongue diagnosis report',
+        content_type: 'application/json',
+        body: {
+          data: { type: 'object', required: true, description: 'Structured tongue analysis data (JSON)' },
+          lang: { type: 'string', enum: SUPPORTED_LANGS, default: 'en', description: 'Output language' },
+          format: { type: 'string', enum: ['html', 'json'], default: 'html', description: 'Output format' },
+        },
+        response_html: 'Complete HTML report document',
+        response_json: 'Structured localized report data',
+      },
+      'GET /api/report/languages': 'List supported report languages',
       'GET /api/health': 'Health check',
       'GET /api/docs': 'This documentation',
     },
@@ -560,12 +573,200 @@ app.get('/api/spiritual-root', (req, res) => {
   }
 });
 
+
+// ============================================================
+// REPORT GENERATION ENDPOINT
+// ============================================================
+
+const SUPPORTED_LANGS = ['zh', 'en', 'de', 'es', 'ar', 'th', 'ms'];
+const LANG_NAMES = { zh: '中文', en: 'English', de: 'Deutsch', es: 'Español', ar: 'العربية', th: 'ไทย', ms: 'Bahasa Melayu' };
+const LANG_FLAGS = { zh: '🇨🇳', en: '🇬🇧', de: '🇩🇪', es: '🇪🇸', ar: '🇸🇦', th: '🇹🇭', ms: '🇲🇾' };
+const LANG_DIRS = { zh: 'ltr', en: 'ltr', de: 'ltr', es: 'ltr', ar: 'rtl', th: 'ltr', ms: 'ltr' };
+
+// ============================================================
+// FALLBACK: Minimal HTML report (last-resort, never fails)
+// ============================================================
+function generateMinimalHTML(lang) {
+  const dir = (lang === 'ar') ? 'rtl' : 'ltr';
+  const disclaimerMap = {
+    zh: '本报告由AI系统生成，仅供中医文化学习与养生参考，不可替代临床诊疗。',
+    en: 'This report is AI-generated for educational and wellness reference only. It does not constitute medical advice.',
+    de: 'Dieser Bericht wurde von einer KI erstellt und dient ausschließlich Bildungs- und Wellnesszwecken.',
+    es: 'Este informe es generado por IA solo con fines educativos.',
+    ar: 'هذا التقرير مُنشأ بواسطة الذكاء الاصطناعي لأغراض تعليمية فقط.',
+    th: 'รายงานนี้สร้างโดย AI เพื่อการศึกษาเท่านั้น',
+    ms: 'Laporan ini dijana oleh AI untuk tujuan pendidikan sahaja.',
+  };
+  return `<!DOCTYPE html>
+<html lang="${lang}" dir="${dir}">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Tongue Analysis Report</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,sans-serif;background:#e8e4df;color:#333;line-height:1.7;padding:20px 0;direction:${dir}}
+.wrap{max-width:600px;margin:0 auto;background:#faf8f5;padding:48px 40px;box-shadow:0 10px 40px rgba(0,0,0,0.1)}
+h2{font-size:20px;color:#1a1a2e;margin-bottom:12px}
+.badge{display:inline-block;background:#6b7280;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:3px;text-transform:uppercase;margin-bottom:16px}
+p{font-size:13px;color:#555;line-height:1.7;margin-bottom:12px}
+.note{font-size:11px;color:#999;padding:12px;background:#f5f0eb;border-radius:6px;margin-top:16px}
+.brand{font-size:12px;color:#c8a86e;font-weight:600;margin-top:24px}
+</style></head>
+<body><div class="wrap">
+<div class="badge">TONGUE ANALYSIS REPORT</div>
+<h2>AI Tongue Diagnosis</h2>
+<p>${disclaimerMap[lang] || disclaimerMap.en}</p>
+<p class="note">This is a minimal fallback report. The full PRO+ report could not be generated due to insufficient data or a processing error. Please ensure all required data fields are provided.</p>
+<div class="brand">AncientTongue.AI</div>
+</div></body></html>`;
+}
+
+// ============================================================
+// REPORT GENERATION — POST (with PRO → Normal → Minimal fallback)
+// ============================================================
+
+/**
+ * POST /api/report
+ * 
+ * Fallback strategy:
+ * 1. Try PRO report (full 12-section deep analysis)
+ * 2. If data insufficient or PRO generation fails → Normal report (simplified but complete)
+ * 3. If Normal also fails → Minimal report (guaranteed output, never empty)
+ * 
+ * Response always includes: report_level ("PRO"|"NORMAL"|"MINIMAL") and downgraded (boolean)
+ */
+app.post('/api/report', (req, res) => {
+  const { data, lang = 'en', format = 'html' } = req.body;
+
+  // --- Input validation (always enforced, no fallback for bad requests) ---
+  if (!SUPPORTED_LANGS.includes(lang)) {
+    return res.status(400).json({
+      error: 'Invalid language',
+      supported: SUPPORTED_LANGS,
+      received: lang,
+    });
+  }
+  if (!['html', 'json'].includes(format)) {
+    return res.status(400).json({
+      error: 'Invalid format',
+      supported: ['html', 'json'],
+      received: format,
+    });
+  }
+  if (!data || typeof data !== 'object') {
+    return res.status(400).json({
+      error: 'Missing or invalid "data" field',
+      description: 'The request body must include a "data" object with structured tongue analysis data.',
+    });
+  }
+
+  // --- Determine report level and generate ---
+  let reportLevel = 'PRO';
+  let downgraded = false;
+  let downgradeReason = null;
+  let output;
+
+  // STEP 1: Check if data is sufficient for PRO
+  const proSufficient = isDataSufficientForPRO(data);
+
+  if (proSufficient) {
+    // STEP 2a: Try PRO report generation
+    try {
+      if (format === 'html') {
+        output = generateReportHTML(data, lang);
+      } else {
+        output = generateReportJSON(data, lang);
+      }
+    } catch (proErr) {
+      // PRO generation threw an error → fallback
+      console.warn('[Report] PRO generation failed:', proErr.message);
+      downgradeReason = `PRO generation error: ${proErr.message}`;
+      reportLevel = 'NORMAL';
+      downgraded = true;
+    }
+  } else {
+    // STEP 2b: Data insufficient for PRO → directly go to Normal
+    console.warn('[Report] Data insufficient for PRO, generating Normal report');
+    downgradeReason = 'Insufficient data for PRO-level report';
+    reportLevel = 'NORMAL';
+    downgraded = true;
+  }
+
+  // STEP 3: If downgraded, generate Normal report
+  if (downgraded && reportLevel === 'NORMAL') {
+    try {
+      if (format === 'html') {
+        output = generateNormalReportHTML(data, lang);
+      } else {
+        output = generateNormalReportJSON(data, lang);
+      }
+    } catch (normalErr) {
+      // Normal also failed → last-resort Minimal
+      console.error('[Report] Normal generation also failed:', normalErr.message);
+      downgradeReason = `Both PRO and Normal failed: PRO=${downgradeReason}, Normal=${normalErr.message}`;
+      reportLevel = 'MINIMAL';
+      output = null; // will be handled below
+    }
+  }
+
+  // STEP 4: If output is still null (everything failed), generate Minimal fallback
+  if (output === null || output === undefined) {
+    console.error('[Report] Generating minimal fallback report');
+    reportLevel = 'MINIMAL';
+    downgraded = true;
+    if (format === 'html') {
+      output = generateMinimalHTML(lang);
+    } else {
+      output = {
+        report_level: 'MINIMAL',
+        downgraded: true,
+        downgrade_reason: downgradeReason,
+        message: 'Report generated with minimal data due to processing errors.',
+        disclaimer: 'Please consult a qualified practitioner for comprehensive analysis.',
+        lang,
+        direction: lang === 'ar' ? 'rtl' : 'ltr',
+        generatedAt: new Date().toISOString(),
+      };
+    }
+  }
+
+  // --- Send response ---
+  if (format === 'html') {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    // Inject metadata as HTML comment for client-side consumption
+    const metaComment = `<!-- report_metadata: ${JSON.stringify({ report_level: reportLevel, downgraded, downgrade_reason: downgradeReason })} -->`;
+    res.send(metaComment + '\n' + output);
+  } else {
+    // JSON response — attach metadata fields
+    if (typeof output === 'object' && output !== null) {
+      output.report_level = reportLevel;
+      output.downgraded = downgraded;
+      if (downgradeReason) {
+        output.downgrade_reason = downgradeReason;
+      }
+    }
+    res.json(output);
+  }
+});
+
+// Get supported languages for reports
+app.get('/api/report/languages', (req, res) => {
+  res.json({
+    supported: SUPPORTED_LANGS,
+    languages: SUPPORTED_LANGS.map(code => ({
+      code,
+      name: LANG_NAMES[code],
+      flag: LANG_FLAGS[code],
+      direction: LANG_DIRS[code],
+    })),
+  });
+});
+
 // Root route
 app.get('/', (req, res) => {
   res.json({
     service: 'Spiritual Root Calculator API',
     version: '1.0.0',
-    endpoints: ['/api/spiritual-root', '/api/health', '/api/docs'],
+    endpoints: ['/api/spiritual-root', '/api/report', '/api/report/languages', '/api/health', '/api/docs'],
   });
 });
 

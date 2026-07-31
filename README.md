@@ -1,297 +1,357 @@
-# 灵根计算 API 部署指南
+# AncientTongue.AI — Multi-Language Report API
 
-> AncientTongue.AI · Spiritual Root Calculator API  
-> 版本：v1.0  
-> 日期：2026-07-30
+PRO+ Tongue Diagnosis Report Generator with 7-language support.
 
----
+## Supported Languages
 
-## 📦 部署包内容
+| Code | Language | Direction |
+|------|----------|-----------|
+| `zh` | 中文 | LTR |
+| `en` | English | LTR |
+| `de` | Deutsch | LTR |
+| `es` | Español | LTR |
+| `ar` | العربية | **RTL** |
+| `th` | ไทย | LTR |
+| `ms` | Bahasa Melayu | LTR |
 
-```
-api_deploy/
-├── spiritual_root_api.js    # API主程序 (21KB)
-├── package.json              # Node.js依赖配置
-├── package-lock.json         # 依赖锁定
-└── README.md                 # 本文件
-```
+## API Endpoint
 
----
+### `POST /api/report`
 
-## 🔧 技术方案
+Generate a localized PRO+ tongue diagnosis report.
 
-### 推荐方案：Railway / Render（最快上线）
+**Request:**
 
-**优势：**
-- 零配置，拖拽部署
-- 自动HTTPS
-- 免费套餐支持
-- 全球CDN
-
-**部署步骤：**
-
-1. **打包代码**
-   ```bash
-   cd api_deploy
-   zip -r spiritual_root_api.zip .
-   ```
-
-2. **部署到 Railway**
-   - 访问 https://railway.app
-   - 创建新项目
-   - 选择 "Deploy from Docker image" 或 "Deploy from GitHub"
-   - 上传 zip 或推送代码到 GitHub
-
-3. **环境变量**
-   ```
-   PORT=3000
-   NODE_ENV=production
-   ```
-
-4. **获取API地址**
-   - Railway会分配一个域名，如：`https://spiritual-root-api.railway.app`
-   - 测试：`https://your-domain.railway.app/api/health`
-
----
-
-### 备选方案：阿里云函数计算 FC
-
-**优势：**
-- 按调用次数付费，成本极低
-- 自动扩缩容
-- 适合B端API服务
-
-**部署步骤：**
-
-1. **安装 Fun CLI**
-   ```bash
-   npm install @alicloud/fun -g
-   ```
-
-2. **配置阿里云凭证**
-   ```bash
-   fun config
-   # 输入 AccessKey ID 和 Secret
-   ```
-
-3. **创建 fun.yml**
-   ```yaml
-   edition: '3.0.0'
-   name: spiritual-root-api
-   access: default
-   
-   resources:
-     spiritual-root-api:
-       component: fc
-       props:
-         region: cn-hangzhou
-         service:
-           name: ancienttongue
-         function:
-           name: spiritual-root
-           runtime: nodejs18
-           handler: spiritual_root_api.app
-           memorySize: 512
-           timeout: 60
-           codeUri: ./
-         triggers:
-           - name: httpTrigger
-             type: http
-             config:
-               authType: anonymous
-               methods: ['GET', 'POST']
-   ```
-
-4. **部署**
-   ```bash
-   fun deploy
-   ```
-
-5. **获取API地址**
-   - 阿里云会分配一个HTTP触发器URL
-   - 格式：`https://xxx.cn-hangzhou.fc.aliyuncs.com/api/spiritual-root`
-
----
-
-### 备选方案：Vercel
-
-**优势：**
-- 免费套餐支持
-- 自动HTTPS
-- 全球CDN
-
-**注意：** Vercel主要面向前端，Node.js API支持有限，建议优先用Railway。
-
----
-
-## 🚀 快速部署（一键脚本）
-
-### 方式1：Docker部署（推荐）
-
-**创建 Dockerfile：**
-```dockerfile
-FROM node:18-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --only=production
-
-COPY spiritual_root_api.js .
-
-EXPOSE 3000
-
-CMD ["node", "spiritual_root_api.js"]
-```
-
-**构建并运行：**
-```bash
-docker build -t spiritual-root-api .
-docker run -p 3000:3000 spiritual-root-api
-```
-
-**推送到Docker Hub：**
-```bash
-docker tag spiritual-root-api yourusername/spiritual-root-api:latest
-docker push yourusername/spiritual-root-api:latest
-```
-
-然后在 Railway/Render 选择 Docker 镜像部署。
-
----
-
-### 方式2：直接上传（Railway）
-
-1. 打包代码：
-   ```bash
-   cd api_deploy
-   zip -r spiritual_root_api.zip .
-   ```
-
-2. 访问 Railway → 新项目 → Deploy from upload
-3. 上传 zip
-4. 等待部署完成（约1-2分钟）
-
----
-
-## 🧪 测试API
-
-部署完成后，测试以下端点：
-
-```bash
-# 健康检查
-curl https://your-domain.com/api/health
-
-# POST方式测试
-curl -X POST https://your-domain.com/api/spiritual-root \
-  -H "Content-Type: application/json" \
-  -d '{
-    "birth_date": "1990-08-16",
-    "birth_hour": 14,
-    "gender": "female"
-  }'
-
-# GET方式测试
-curl "https://your-domain.com/api/spiritual-root?birth_date=1990-08-16&birth_hour=14&gender=female"
-
-# API文档
-curl https://your-domain.com/api/docs
-```
-
----
-
-## 💰 成本估算
-
-### Railway
-- 免费套餐：$5/月额度
-- 预计成本：$0-5/月（轻量级API）
-- 超出后：$0.0005/请求
-
-### 阿里云 FC
-- 免费额度：100万次调用/月
-- 超出后：¥0.0001/次
-- 预计成本：¥0-10/月
-
-### Render
-- 免费套餐：750小时/月
-- 自动休眠（15分钟无请求）
-- 适合测试，不适合生产
-
----
-
-## 🔐 安全配置
-
-### 生产环境建议：
-
-1. **启用HTTPS**（Railway/Render自动支持）
-
-2. **添加API密钥验证**（可选）
-   ```javascript
-   // 在 spiritual_root_api.js 中添加
-   const API_KEY = process.env.API_KEY;
-   
-   app.use((req, res, next) => {
-     if (req.path === '/api/spiritual-root') {
-       const key = req.headers['x-api-key'];
-       if (key !== API_KEY) {
-         return res.status(401).json({ error: 'Invalid API key' });
-       }
-     }
-     next();
-   });
-   ```
-
-3. **限制请求频率**（可选）
-   - 使用 express-rate-limit 中间件
-   - 建议：100次/分钟/IP
-
-4. **日志监控**
-   - Railway/Render 自带日志
-   - 可接入 Sentry 错误追踪
-
----
-
-## 📊 监控与运维
-
-### 健康检查端点
-```
-GET /api/health
-```
-返回：
 ```json
 {
-  "status": "ok",
-  "timestamp": "2026-07-30T00:00:00.000Z",
-  "uptime": 3600
+  "data": { /* structured tongue analysis data */ },
+  "lang": "de",
+  "format": "html"
 }
 ```
 
-### 建议监控指标：
-- 请求成功率
-- 响应时间（P50/P95/P99）
-- 错误率
-- 并发请求数
+**Parameters:**
 
----
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `data` | object | Yes | — | Structured tongue analysis data (see schema below) |
+| `lang` | string | No | `"en"` | Output language code |
+| `format` | string | No | `"html"` | `"html"` for rendered report, `"json"` for structured data |
 
-## 🎯 下一步
+**Response (HTML):**
+- Content-Type: `text/html; charset=utf-8`
+- Complete, self-contained HTML document with inline CSS
+- Responsive design (780px max-width)
+- RTL support for Arabic
+- Report metadata injected as HTML comment at top: `<!-- report_metadata: {...} -->`
 
-API上线后，可以：
+**Response (JSON):**
+- Content-Type: `application/json`
+- Structured report data with all text resolved to target language
 
-1. **B端合作**：向合作方提供API接入文档
-2. **网站集成**：AncientTongue.AI网站接入API
-3. **小程序接入**：国内小程序调用API
-4. **数据分析**：记录调用数据，分析用户画像
+### Response Metadata
 
----
+All responses include these metadata fields (JSON body or HTML comment):
 
-## 📞 技术支持
+| Field | Type | Description |
+|-------|------|-------------|
+| `report_level` | string | `"PRO"` / `"NORMAL"` / `"MINIMAL"` — actual level generated |
+| `downgraded` | boolean | `true` if report was downgraded from PRO |
+| `downgrade_reason` | string | Only present if downgraded; explains why |
 
-如有问题，联系：
-- 邮箱：zhangyunfei@shejianai.com.cn
-- 微信：[老公微信]
+**JSON example (downgraded):**
+```json
+{
+  "report_level": "NORMAL",
+  "downgraded": true,
+  "downgrade_reason": "Insufficient data for PRO-level report",
+  "lang": "de",
+  "direction": "ltr",
+  "report": { ... },
+  "generatedAt": "2026-07-15T09:42:00.000Z"
+}
+```
 
----
+### Fallback Mechanism
 
-**文档版本：** v1.0  
-**最后更新：** 2026-07-30
+The API guarantees it **never returns an empty report or error**. Three-level fallback:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    REQUEST RECEIVED                              │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+         ┌─────────────────────────┐
+         │ isDataSufficientForPRO? │
+         │ - patternName exists?   │
+         │ - tongueBody has        │
+         │   shape + color?        │
+         │ - pathogenesis or       │
+         │   predictions exist?    │
+         └────────┬────────┬───────┘
+                  │        │
+            YES   │        │  NO
+                  ▼        ▼
+         ┌──────────────┐  ┌──────────────────────┐
+         │ Try PRO      │  │ → Generate NORMAL    │
+         │ generateReport│  │ generateNormalReport  │
+         │ HTML/JSON    │  │ HTML/JSON             │
+         └──────┬───────┘  └──────────┬────────────┘
+                │                     │
+           success?              success?
+           ┌──┐ ┌──┐           ┌──┐ ┌──┐
+        YES│  │ │  │NO       YES│  │ │  │NO
+           ▼  │ │  ▼          ▼  │ │  ▼
+    ┌──────┐ │ │ ┌──────────┐ │ │ ┌──────────┐
+    │PRO   │ │ │ │→ NORMAL  │ │ │ │→ MINIMAL │
+    │level │ │ │ │fallback  │ │ │ │last-resort│
+    └──────┘ │ │ └──────────┘ │ │ └──────────┘
+             │ │              │ │
+             │ └─► try Normal │ └─► Minimal
+             │                │
+```
+
+| Level | Sections | Badge Color | When |
+|-------|----------|-------------|------|
+| **PRO** | All 12 sections (tongue, sublingual, cross-validation, pathogenesis, predictions, red flags, treatments, food therapy, formulas, dietary rules, indicators, healing crisis) | Gold | Data is complete |
+| **NORMAL** | Hero + tongue findings + pathogenesis + predictions + dietary rules + disclaimer | Grey | Data incomplete or PRO generation error |
+| **MINIMAL** | Basic hero + disclaimer only | Grey | Both PRO and Normal failed (extreme edge case) |
+
+### `GET /api/report/languages`
+
+Returns list of supported languages with metadata.
+
+**Response:**
+```json
+{
+  "supported": ["zh", "en", "de", "es", "ar", "th", "ms"],
+  "languages": [
+    { "code": "de", "name": "Deutsch", "flag": "🇩🇪", "direction": "ltr" }
+  ]
+}
+```
+
+## Data Schema
+
+The `data` object follows this structure:
+
+```javascript
+{
+  // Meta information
+  "meta": {
+    "reportId": "PR-20260715-001",
+    "date": "July 15, 2026"
+  },
+
+  // Subject info
+  "subject": {
+    "gender": { "zh": "女", "en": "Female", "de": "Weiblich", ... },
+    "age": "41 years old",
+    "birthInfo": { "zh": "生于1985年...", "en": "Born 1985...", ... }
+  },
+
+  // Pattern identification
+  "patternName": { "zh": "阳郁血瘀", "en": "Stagnated Yang with Blood Stasis", "de": "Yang-Stagnation mit Blut-Stase", ... },
+  "sixStages": [
+    { "zh": "厥阴", "en": "Jueyin", "de": "Jueyin", ... }
+  ],
+  "patternTags": [
+    { "zh": "肝郁阳遏", "en": "Liver Constraint with Yang Suppression", ... }
+  ],
+
+  // Hero description
+  "heroDescription": { "zh": "...", "en": "...", "de": "...", ... },
+
+  // Optional images
+  "tongueImage": "https://...",
+  "sublingualImage": "https://...",
+
+  // Section 1: Tongue Body Analysis
+  "tongueBody": {
+    "title": { "en": "Dark Tongue Body..." },
+    "shape": {
+      "label": { "zh": "舌形", "en": "Shape", ... },
+      "classification": { "zh": "偏窄而紧束", "en": "Narrow and constricted", ... },
+      "presentation": { "zh": "...", "en": "...", ... },
+      "significance": { "zh": "...", "en": "...", ... }
+    },
+    "color": { ... },
+    "coat": { ... },
+    "teethMarks": { ... },
+    "zonesLabel": { "zh": "分区观察", "en": "Zone Observations", ... },
+    "zones": [
+      {
+        "name": { "zh": "舌尖（心/肺）", "en": "Tip (Heart/Lung)", ... },
+        "finding": { "zh": "...", "en": "...", ... },
+        "meaning": { "zh": "...", "en": "...", ... }
+      }
+    ],
+    "tipSpecial": { ... }
+  },
+
+  // Section 2: Sublingual Analysis
+  "sublingual": {
+    "collaterals": {
+      "label": { "zh": "络脉三观察", "en": "Collateral Vessel Assessment", ... },
+      "observations": [
+        {
+          "label": { "zh": "长度", "en": "Length", ... },
+          "value": { "zh": "...", "en": "...", ... },
+          "note": { "zh": "...", "en": "...", ... }
+        }
+      ]
+    },
+    "blockageLabel": { ... },
+    "blockageZones": [ ... ]
+  },
+
+  // Section 3: Cross Validation
+  "crossValidation": [
+    {
+      "tongueAbove": { "zh": "...", "en": "...", ... },
+      "tongueBelow": { "zh": "...", "en": "...", ... },
+      "conclusion": { "zh": "...", "en": "...", ... }
+    }
+  ],
+
+  // Section 4: Pathogenesis
+  "pathogenesis": {
+    "coreMechanism": { "zh": "...", "en": "...", ... },
+    "treatmentPrinciple": { "zh": "...", "en": "...", ... },
+    "jiaoCards": [
+      {
+        "icon": "↑",
+        "title": { "zh": "上焦", "en": "Upper Jiao", ... },
+        "pattern": { "zh": "...", "en": "...", ... },
+        "analysis": { "zh": "...", "en": "...", ... }
+      }
+    ],
+    "deficiencyExcessLabel": { ... },
+    "deficiencyExcess": {
+      "deficiency": { "zh": "...", "en": "...", ... },
+      "excess": { "zh": "...", "en": "...", ... }
+    }
+  },
+
+  // Section 5: Symptom Predictions
+  "predictions": [
+    {
+      "symptom": { "zh": "...", "en": "...", ... },
+      "mechanism": { "zh": "...", "en": "...", ... },
+      "screening": { "zh": "...", "en": "...", ... }
+    }
+  ],
+
+  // Section 6: Red Flags
+  "redFlags": [
+    {
+      "name": { "zh": "甲状腺结节", "en": "Thyroid Nodules", ... },
+      "action": { "zh": "建议排查", "en": "Screening Recommended", ... }
+    }
+  ],
+
+  // Section 7: External Treatments
+  "treatments": {
+    "guaSha": [
+      { "name": { "zh": "...", "en": "...", ... }, "detail": { ... } }
+    ],
+    "moxibustion": [ ... ],
+    "exercise": [ ... ],
+    "acupressure": [ ... ],
+    "contraindications": [ ... ]
+  },
+
+  // Section 8: Food Therapy
+  "recipes": [
+    {
+      "name": { "zh": "玫瑰疏肝茶", "en": "Rose Liver-Soothing Tea", ... },
+      "chineseName": "玫瑰疏肝茶",
+      "ingredients": { "zh": "...", "en": "...", ... },
+      "preparation": { "zh": "...", "en": "...", ... },
+      "effect": { "zh": "...", "en": "...", ... }
+    }
+  ],
+  "sugarGuide": true,
+
+  // Section 9: Classical Formulas
+  "formulas": [
+    {
+      "key": "siNiSan",
+      "description": { "zh": "...", "en": "...", ... }
+    }
+  ],
+
+  // Section 10: Dietary Rules
+  "dietaryRules": [
+    { "key": "avoidColdRaw" },
+    { "key": "avoidAlcohol" },
+    { "key": "avoidSpicy" },
+    { "key": "dinnerEarly" },
+    { "key": "limitCoffee" }
+  ],
+
+  // Section 11: Key Indicators
+  "indicators": [
+    {
+      "name": { "zh": "四肢温度", "en": "Extremity Temperature", ... },
+      "question": { "zh": "...", "en": "...", ... },
+      "target": { "zh": "...", "en": "...", ... }
+    }
+  ],
+
+  // Section 12: Healing Crisis
+  "healingCrisis": {
+    "symptoms": [
+      { "zh": "...", "en": "...", ... }
+    ]
+  }
+}
+```
+
+## Translation Strategy
+
+### TCM Terminology
+- **WHO standard nomenclature** used for core concepts (e.g., "Liver Qi Stagnation", "Blood Stasis")
+- **Pinyin + local translation** for classical formulas (e.g., "Sì Nì Sǎn — Four Counterflow Powder")
+- **International code + pinyin** for acupoints (e.g., "LV3 Taichong")
+
+### Dietary Rules
+Uses pre-translated rule keys (`avoidColdRaw`, `avoidAlcohol`, etc.) mapped to the translation dictionary for consistent terminology across reports.
+
+### Classical Formulas
+References formulas by key (`siNiSan`, `guiZhiFuLingWan`, `dangGuiSiNiTang`) with translations from the dictionary.
+
+## Translation Files
+
+- `report_translations.js` — Complete 7-language translation dictionary
+- `report_generator.js` — HTML report template engine
+
+## Usage Example
+
+```bash
+curl -X POST https://your-api.railway.app/api/report \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "meta": { "reportId": "PR-001", "date": "2026-07-15" },
+      "patternName": { "de": "Yang-Stagnation mit Blut-Stase", "en": "Stagnated Yang with Blood Stasis" },
+      ...
+    },
+    "lang": "de",
+    "format": "html"
+  }'
+```
+
+## Design Specs
+
+- **Fonts:** Inter (body) + Playfair Display (headings)
+- **Colors:** Deep navy (#0a0e27) hero, gold (#c8a86e) accents, warm background (#faf8f5)
+- **Layout:** 780px max-width, responsive, print-friendly
+- **RTL:** Full support for Arabic (dir="rtl", mirrored layouts)
+- **Language-specific fonts:** Noto Sans Arabic / Noto Sans Thai loaded conditionally
+
+## Company
+
+AncientTongue AI Technology (Hainan) Co., Ltd.  
+Contact: zhangyunfei@shejianai.com.cn
